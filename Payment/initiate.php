@@ -28,15 +28,32 @@ if (empty($address)) {
     exit;
 }
 
-$cartItems = getCartItems();
-if (empty($cartItems)) {
-    $_SESSION['cart_error'] = 'Your cart is empty.';
+$selectedItemsIds = $_POST['selected_items'] ?? [];
+if (empty($selectedItemsIds)) {
+    $_SESSION['cart_error'] = 'Please select at least one item to checkout.';
     header('Location: ../customer/cart.php');
     exit;
 }
 
-$subtotal = getCartTotal();
-$shipping = 100.00;
+$allCartItems = getCartItems();
+$cartItems = array_filter($allCartItems, function ($item) use ($selectedItemsIds) {
+    return in_array($item['cart_id'], $selectedItemsIds);
+});
+
+if (empty($cartItems)) {
+    $_SESSION['cart_error'] = 'The selected items are no longer available.';
+    header('Location: ../customer/cart.php');
+    exit;
+}
+
+// Regional Shipping: Rs. 50 for Kathmandu, Rs. 150 otherwise
+$shipping = ($province === 'Bagmati Pradesh' && $district === 'Kathmandu') ? 50.00 : 150.00;
+
+$subtotal = 0;
+foreach ($cartItems as $item) {
+    $subtotal += getDiscountedPrice($item['price'], $item['discount_percent']) * $item['quantity'];
+}
+
 $discountAmt = isset($_SESSION['coupon_discount']) ? ($subtotal * $_SESSION['coupon_discount'] / 100) : 0;
 $total = $subtotal - $discountAmt + $shipping;
 $couponId = $_SESSION['coupon_id'] ?? null;
@@ -74,8 +91,9 @@ $userRow = $pdo->prepare("SELECT full_name, email, phone FROM users WHERE id = ?
 $userRow->execute([$user_id]);
 $user = $userRow->fetch();
 
-// 4. Store order_id in session for retrieval on callback
+// 4. Store order_id and selected items in session for retrieval on callback
 $_SESSION['khalti_order_id'] = $order_id;
+$_SESSION['khalti_selected_items'] = $selectedItemsIds;
 
 // 5. Amount in paisa (NPR × 100)
 $amountPaisa = (int) round($total * 100);

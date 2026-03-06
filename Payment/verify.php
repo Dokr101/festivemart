@@ -42,11 +42,16 @@ if ($verification['success'] && $verification['status'] === 'Completed') {
     $pdo->prepare("UPDATE coupons c JOIN orders o ON c.id = o.coupon_id SET c.used_count = c.used_count + 1 WHERE o.id = ?")
         ->execute([$order_id]);
 
-    // Clear the cart
-    $pdo->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$user_id]);
+    // Clear ONLY the selected items from the cart
+    $selectedItemsIds = $_SESSION['khalti_selected_items'] ?? [];
+    if (!empty($selectedItemsIds)) {
+        $inQuery = implode(',', array_fill(0, count($selectedItemsIds), '?'));
+        $pdo->prepare("DELETE FROM cart WHERE id IN ($inQuery) AND user_id = ?")
+            ->execute(array_merge($selectedItemsIds, [$user_id]));
+    }
 
-    // Clear coupon session
-    unset($_SESSION['coupon_id'], $_SESSION['coupon_code'], $_SESSION['coupon_discount'], $_SESSION['khalti_order_id']);
+    // Clear coupon and khalti sessions
+    unset($_SESSION['coupon_id'], $_SESSION['coupon_code'], $_SESSION['coupon_discount'], $_SESSION['khalti_order_id'], $_SESSION['khalti_selected_items']);
 
     // Redirect to success
     header('Location: success.php?order_id=' . $order_id . '&txn=' . urlencode($verification['transaction_id']));

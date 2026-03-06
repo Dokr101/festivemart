@@ -22,6 +22,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $is_preorder = isset($_POST['is_preorder']) ? 1 : 0;
         $image_name = $_POST['existing_image'] ?? '';
 
+        // Server-side validation
+        if ($price < 0)
+            $error = "Price cannot be negative.";
+        if ($stock < 0)
+            $error = "Stock quantity cannot be negative.";
+        if ($discount < 0)
+            $error = "Discount percentage cannot be negative.";
+
         // Handle Image Upload
         if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
             $file = $_FILES['product_image'];
@@ -280,11 +288,12 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
                 <div class="grid-2 mb-2">
                     <div class="form-group mb-0">
                         <label class="form-label">Base Price (Rs.)</label>
-                        <input type="number" step="0.01" name="price" id="prodPrice" class="form-control" required>
+                        <input type="number" step="0.01" min="0" name="price" id="prodPrice" class="form-control"
+                            required>
                     </div>
                     <div class="form-group mb-0">
                         <label class="form-label">Stock Quantity</label>
-                        <input type="number" name="stock" id="prodStock" class="form-control" required>
+                        <input type="number" min="0" name="stock" id="prodStock" class="form-control" required>
                     </div>
                 </div>
 
@@ -320,20 +329,30 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
 
                 <div class="form-group">
                     <label class="form-label">Product Image (Max 5MB)</label>
-                    <input type="file" name="product_image" id="prodImgInput" class="form-control" accept="image/*"
-                        onchange="previewImage(this)">
+                    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('prodImgInput').click()">
+                        <div class="upload-zone-icon">🖼️</div>
+                        <div class="upload-zone-msg">
+                            <strong>Click or Drag image here</strong>
+                            JPG, PNG, GIF or WebP (Max 5MB)
+                        </div>
+                        <input type="file" name="product_image" id="prodImgInput" class="hidden" accept="image/*"
+                            onchange="handleFileSelect(this)" style="display:none;">
+                    </div>
+
                     <div id="imgPreviewWrap" class="mt-1" style="display:none;">
-                        <img id="imgPreview" src=""
-                            style="max-height:100px; border-radius:8px; border:1px solid var(--admin-border);">
-                        <p class="text-muted" style="font-size:0.7rem;">Current image</p>
+                        <img id="imgPreview" src="" alt="Preview">
+                        <div class="preview-info">
+                            <span class="preview-name" id="previewName">filename.jpg</span>
+                            <span class="preview-size" id="previewSize">0 KB</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="grid-2 mb-3">
                     <div class="form-group mb-0">
                         <label class="form-label">Discount (%)</label>
-                        <input type="number" step="0.01" name="discount_percent" id="prodDisc" class="form-control"
-                            value="0.00">
+                        <input type="number" step="0.01" min="0" name="discount_percent" id="prodDisc"
+                            class="form-control" value="0.00">
                     </div>
                     <div class="form-group mb-0 flex items-center gap-1 mt-2">
                         <label class="flex items-center gap-1"
@@ -373,16 +392,58 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
             }
         }
 
-        function previewImage(input) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    document.getElementById('imgPreview').src = e.target.result;
-                    document.getElementById('imgPreviewWrap').style.display = 'block';
-                }
-                reader.readAsDataURL(input.files[0]);
+        function handleFileSelect(input) {
+            const file = input.files[0];
+            if (file) {
+                previewFile(file);
             }
         }
+
+        function previewFile(file) {
+            const reader = new FileReader();
+            const preview = document.getElementById('imgPreview');
+            const wrap = document.getElementById('imgPreviewWrap');
+            const nameEl = document.getElementById('previewName');
+            const sizeEl = document.getElementById('previewSize');
+
+            nameEl.innerText = file.name;
+            sizeEl.innerText = (file.size / 1024).toFixed(2) + ' KB';
+
+            reader.onload = function (e) {
+                preview.src = e.target.result;
+                wrap.style.display = 'flex';
+            };
+
+            reader.onerror = function () {
+                alert("Error: Could not read file. This might be due to security restrictions if the file is on another drive.");
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // Drag and Drop Logic
+        const zone = document.getElementById('uploadZone');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+            zone.addEventListener(evt, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        ['dragenter', 'dragover'].forEach(evt => {
+            zone.addEventListener(evt, () => zone.classList.add('dragover'));
+        });
+
+        ['dragleave', 'drop'].forEach(evt => {
+            zone.addEventListener(evt, () => zone.classList.remove('dragover'));
+        });
+
+        zone.addEventListener('drop', e => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            document.getElementById('prodImgInput').files = files;
+            if (files[0]) previewFile(files[0]);
+        });
 
         function editProduct(p) {
             document.getElementById('formAction').value = 'edit';
@@ -399,8 +460,11 @@ $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
             document.getElementById('prodExistingImg').value = p.image || '';
 
             if (p.image) {
-                document.getElementById('imgPreview').src = '../assets/uploads/products/' + p.image;
-                document.getElementById('imgPreviewWrap').style.display = 'block';
+                const preview = document.getElementById('imgPreview');
+                preview.src = '../assets/uploads/products/' + p.image;
+                document.getElementById('imgPreviewWrap').style.display = 'flex';
+                document.getElementById('previewName').innerText = p.image.split('/').pop();
+                document.getElementById('previewSize').innerText = 'Existing Image';
             } else {
                 document.getElementById('imgPreviewWrap').style.display = 'none';
             }

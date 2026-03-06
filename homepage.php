@@ -54,7 +54,7 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                 <li><a href="<?php echo isAdmin() ? 'admin/dashboard.php' : 'customer/account.php'; ?>">Dashboard</a></li>
                 <li><a href="customer/cart.php" class="cart-badge">Cart <span
                             class="cart-count"><?php echo getCartCount(); ?></span></a></li>
-                <li><a href="auth/logout.php">Logout</a></li>
+                <li><a href="auth/logout.php" class="logout-btn"><span class="logout-icon">🚪</span> Logout</a></li>
             <?php else: ?>
                 <li><a href="auth/login.php" class="btn-nav-cta">Log In</a></li>
             <?php endif; ?>
@@ -106,7 +106,8 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                     <div class="text-center" style="text-align:left;">
                         <div class="countdown-label">Time remaining until</div>
                         <div style="font-weight:600; color:var(--text-primary);">
-                            <?php echo htmlspecialchars($upcoming['name']); ?></div>
+                            <?php echo htmlspecialchars($upcoming['name']); ?>
+                        </div>
                     </div>
                     <div class="countdown-units">
                         <div class="countdown-block">
@@ -237,7 +238,8 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                                 <div class="festival-card-status status-active mb-1">LIVE NOW</div>
                             <?php else: ?>
                                 <div class="festival-card-status status-upcoming mb-1">IN
-                                    <?php echo getFestivalCountdownDays($fest); ?> DAYS</div>
+                                    <?php echo getFestivalCountdownDays($fest); ?> DAYS
+                                </div>
                             <?php endif; ?>
 
                             <h3 class="festival-card-name"><?php echo htmlspecialchars($fest['name']); ?></h3>
@@ -245,7 +247,8 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                                 <?php echo date('M d', strtotime($fest['start_date'])) . ' - ' . date('M d, Y', strtotime($fest['end_date'])); ?>
                             </div>
                             <p class="festival-card-desc">
-                                <?php echo htmlspecialchars(substr($fest['description'], 0, 70)) . '...'; ?></p>
+                                <?php echo htmlspecialchars(substr($fest['description'], 0, 70)) . '...'; ?>
+                            </p>
 
                             <div
                                 style="color: var(--text-primary); font-size: 0.85rem; font-weight: 600; display:flex; align-items:center; gap:5px;">

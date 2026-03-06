@@ -91,6 +91,7 @@ $reason = htmlspecialchars($_GET['reason'] ?? 'Payment was not completed');
             <li><a href="../homepage.php">Home</a></li>
             <li><a href="../customer/shop.php">Shop</a></li>
             <li><a href="../customer/account.php">My Orders</a></li>
+            <li><a href="../auth/logout.php" class="logout-btn"><span class="logout-icon">🚪</span> Logout</a></li>
         </ul>
     </nav>
 

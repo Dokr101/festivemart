@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $s = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ? AND user_id = ?");
             $s->execute([$qty, $cart_id, $user_id]);
         }
-        $success = "Cart updated successfully.";
+
     } elseif ($action === 'remove') {
         $cart_id = (int) $_POST['cart_id'];
         $s = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
@@ -61,64 +61,124 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         unset($_SESSION['coupon_id'], $_SESSION['coupon_code'], $_SESSION['coupon_discount']);
         $success = "Coupon removed.";
     } elseif ($action === 'checkout') {
-        $cartItems = getCartItems();
-        if (empty($cartItems)) {
-            $error = "Your cart is empty.";
+        $selectedItemsIds = $_POST['selected_items'] ?? [];
+        if (empty($selectedItemsIds)) {
+            $error = "Please select at least one item to checkout.";
         } else {
-            $subtotal = getCartTotal();
-            $shipping = 100.00;
-            $discountAmt = isset($_SESSION['coupon_discount']) ? ($subtotal * $_SESSION['coupon_discount'] / 100) : 0;
-            $total = $subtotal - $discountAmt + $shipping;
+            $allCartItems = getCartItems();
+            $cartItems = array_filter($allCartItems, function ($item) use ($selectedItemsIds) {
+                return in_array($item['cart_id'], $selectedItemsIds);
+            });
 
-            // Build address from dropdown fields + street
-            $province = trim($_POST['province'] ?? '');
-            $district = trim($_POST['district'] ?? '');
-            $municipality = trim($_POST['municipality'] ?? '');
-            $street = trim($_POST['street_address'] ?? '');
-            $addressParts = array_filter([$street, $municipality, $district, $province]);
-            $address = !empty($addressParts) ? implode(', ', $addressParts) : 'Default Address';
-            $couponId = $_SESSION['coupon_id'] ?? null;
+            if (empty($cartItems)) {
+                $error = "The selected items are no longer available.";
+            } else {
+                $province = trim($_POST['province'] ?? '');
+                $district = trim($_POST['district'] ?? '');
 
-            try {
-                $pdo->beginTransaction();
+                // Dynamic Shipping Logic: Rs. 50 for Kathmandu, Rs. 150 otherwise
+                $shipping = ($province === 'Bagmati Pradesh' && $district === 'Kathmandu') ? 50.00 : 150.00;
 
-                // 1. Create Order
-                $s = $pdo->prepare("INSERT INTO orders (user_id, coupon_id, subtotal, shipping, discount, total, delivery_address) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $s->execute([$user_id, $couponId, $subtotal, $shipping, $discountAmt, $total, $address]);
-                $order_id = $pdo->lastInsertId();
-
-                // 2. Insert Order Items & Update Stock
-                $sItem = $pdo->prepare("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)");
-                $sStock = $pdo->prepare("UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?");
-
+                $subtotal = 0;
                 foreach ($cartItems as $item) {
-                    $finalPrice = getDiscountedPrice($item['price'], $item['discount_percent']);
-                    $sItem->execute([$order_id, $item['product_id'], $item['quantity'], $finalPrice]);
-                    $sStock->execute([$item['quantity'], $item['product_id']]);
+                    $subtotal += getDiscountedPrice($item['price'], $item['discount_percent']) * $item['quantity'];
                 }
 
-                // 3. Clear Cart
-                $pdo->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$user_id]);
+                $discountAmt = isset($_SESSION['coupon_discount']) ? ($subtotal * $_SESSION['coupon_discount'] / 100) : 0;
+                $total = $subtotal - $discountAmt + $shipping;
 
-                $pdo->commit();
+                $addressParts = array_filter([trim($_POST['street_address'] ?? ''), trim($_POST['municipality'] ?? ''), $district, $province]);
+                $address = !empty($addressParts) ? implode(', ', $addressParts) : 'Default Address';
+                $couponId = $_SESSION['coupon_id'] ?? null;
 
-                // Unset coupon
-                unset($_SESSION['coupon_id'], $_SESSION['coupon_code'], $_SESSION['coupon_discount']);
+                try {
+                    $pdo->beginTransaction();
 
-                // Redirect to success
-                header("Location: account.php?tab=orders&msg=order_success");
-                exit;
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                $error = "Failed to place order. " . $e->getMessage();
+                    // 1. Create Order
+                    $s = $pdo->prepare("INSERT INTO orders (user_id, coupon_id, subtotal, shipping, discount, total, delivery_address) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $s->execute([$user_id, $couponId, $subtotal, $shipping, $discountAmt, $total, $address]);
+                    $order_id = $pdo->lastInsertId();
+
+                    // 2. Insert Order Items & Update Stock
+                    $sItem = $pdo->prepare("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)");
+                    $sStock = $pdo->prepare("UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?");
+
+                    foreach ($cartItems as $item) {
+                        $finalPrice = getDiscountedPrice($item['price'], $item['discount_percent']);
+                        $sItem->execute([$order_id, $item['product_id'], $item['quantity'], $finalPrice]);
+                        $sStock->execute([$item['quantity'], $item['product_id']]);
+                    }
+
+                    // 3. Clear ONLY selected items from Cart
+                    $inQuery = implode(',', array_fill(0, count($selectedItemsIds), '?'));
+                    $pdo->prepare("DELETE FROM cart WHERE id IN ($inQuery) AND user_id = ?")
+                        ->execute(array_merge($selectedItemsIds, [$user_id]));
+
+                    $pdo->commit();
+
+                    // Unset coupon
+                    unset($_SESSION['coupon_id'], $_SESSION['coupon_code'], $_SESSION['coupon_discount']);
+
+                    header("Location: account.php?tab=orders&msg=order_success");
+                    exit;
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $error = "Failed to place order. " . $e->getMessage();
+                }
             }
         }
+    } elseif ($action === 'update_qty_ajax') {
+        $cart_id = (int) $_POST['cart_id'];
+        $qty = max(1, (int) $_POST['quantity']);
+        $s = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ? AND user_id = ?");
+        $s->execute([$qty, $cart_id, $user_id]);
+
+        $itemTotal = 0;
+        $allTotal = 0;
+
+        // Fetch new state to return
+        $s = $pdo->prepare("SELECT c.quantity, p.price, p.discount_percent FROM cart c JOIN products p ON c.product_id = p.id WHERE c.id = ?");
+        $s->execute([$cart_id]);
+        $data = $s->fetch();
+        if ($data) {
+            $price = getDiscountedPrice($data['price'], $data['discount_percent']);
+            $itemTotal = $price * $data['quantity'];
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'item_total' => formatPrice($itemTotal),
+            'item_total_raw' => $itemTotal
+        ]);
+        exit;
+    } elseif ($action === 'toggle_selection_ajax') {
+        $cart_id = (int) $_POST['cart_id'];
+        $selected = $_POST['selected'] === 'true';
+        if (!isset($_SESSION['cart_selection'])) {
+            $_SESSION['cart_selection'] = [];
+        }
+        $_SESSION['cart_selection'][$cart_id] = $selected;
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true]);
+        exit;
+    } elseif ($action === 'select_all_ajax') {
+        $selected = $_POST['selected'] === 'true';
+        if (!isset($_SESSION['cart_selection'])) {
+            $_SESSION['cart_selection'] = [];
+        }
+        foreach (getCartItems() as $item) {
+            $_SESSION['cart_selection'][$item['cart_id']] = $selected;
+        }
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true]);
+        exit;
     }
 }
 
 $cartItems = getCartItems();
 $subtotal = getCartTotal();
-$shipping = count($cartItems) > 0 ? 100.00 : 0;
+$shipping = count($cartItems) > 0 ? 150.00 : 0;
 $discountAmt = isset($_SESSION['coupon_discount']) ? ($subtotal * $_SESSION['coupon_discount'] / 100) : 0;
 $total = $subtotal - $discountAmt + $shipping;
 ?>
@@ -144,7 +204,7 @@ $total = $subtotal - $discountAmt + $shipping;
             <li><a href="cart.php" class="active cart-badge">Cart <span class="cart-count">
                         <?php echo count($cartItems); ?>
                     </span></a></li>
-            <li><a href="../auth/logout.php">Logout</a></li>
+            <li><a href="../auth/logout.php" class="logout-btn"><span class="logout-icon">🚪</span> Logout</a></li>
         </ul>
     </nav>
 
@@ -174,17 +234,50 @@ $total = $subtotal - $discountAmt + $shipping;
                 <a href="shop.php" class="btn btn-primary">Start Shopping</a>
             </div>
         <?php else: ?>
-            <div class="cart-layout" style="grid-template-columns: 1fr 650px;">
+            <div class="cart-layout">
 
-                <!-- Left: Items List -->
-                <div class="cart-items">
+                <!-- Left Column: Products -->
+                <div class="cart-items-column">
+                    <div class="cart-selection-header">
+                        <div class="flex items-center gap-1">
+                            <?php
+                            $allSelected = true;
+                            if (empty($cartItems)) {
+                                $allSelected = false;
+                            } else {
+                                foreach ($cartItems as $c) {
+                                    if (isset($_SESSION['cart_selection'][$c['cart_id']]) && !$_SESSION['cart_selection'][$c['cart_id']]) {
+                                        $allSelected = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            ?>
+                            <input type="checkbox" id="selectAllItems" class="item-checkbox" <?php echo $allSelected ? 'checked' : ''; ?>>
+                            <label for="selectAllItems"
+                                style="font-weight: 600; cursor: pointer; color: var(--text);">Select All Items</label>
+                        </div>
+                        <div class="text-muted" style="font-size: 0.85rem;">
+                            <?php echo count($cartItems); ?> Items in Cart
+                        </div>
+                    </div>
+
                     <form action="cart.php" method="POST" id="updateCartForm">
                         <input type="hidden" name="action" value="update">
                         <div class="card p-0 mb-3">
                             <?php foreach ($cartItems as $item):
                                 $price = getDiscountedPrice($item['price'], $item['discount_percent']);
                                 ?>
-                                <div class="cart-item">
+                                <?php
+                                $isSelected = !isset($_SESSION['cart_selection'][$item['cart_id']]) || $_SESSION['cart_selection'][$item['cart_id']];
+                                ?>
+                                <div class="cart-item <?php echo !$isSelected ? 'unselected' : ''; ?>"
+                                    data-price="<?php echo $price; ?>" data-cart-id="<?php echo $item['cart_id']; ?>">
+                                    <div class="cart-item-select">
+                                        <input type="checkbox" name="selected_items[]" value="<?php echo $item['cart_id']; ?>"
+                                            class="item-checkbox" <?php echo $isSelected ? 'checked' : ''; ?>
+                                            data-cart-id="<?php echo $item['cart_id']; ?>">
+                                    </div>
                                     <div class="cart-item-img">
                                         <?php if (!empty($item['image'])): ?>
                                             <img src="../assets/uploads/products/<?php echo htmlspecialchars($item['image']); ?>"
@@ -193,347 +286,422 @@ $total = $subtotal - $discountAmt + $shipping;
                                             🛍️
                                         <?php endif; ?>
                                     </div>
-                                    <div>
-                                        <div class="product-name mb-1" style="font-size: 1rem;">
+                                    <div class="cart-item-info">
+                                        <div class="product-name"
+                                            style="font-weight: 600; color: var(--text); font-size: 1.1rem;">
                                             <?php echo htmlspecialchars($item['name']); ?>
                                         </div>
-                                        <div class="product-price">
-                                            <?php echo formatPrice($price); ?>
+
+                                        <div class="cart-item-details-row">
+                                            <div class="unit-price"
+                                                style="font-size: 0.95rem; color: var(--text-muted); min-width: 100px;">
+                                                <small style="display:block; opacity: 0.7;">Per unit</small>
+                                                <?php echo formatPrice($price); ?>
+                                            </div>
+
+                                            <div class="cart-qty-control">
+                                                <button type="button" class="qty-btn-ajax minus"
+                                                    data-cart-id="<?php echo $item['cart_id']; ?>">-</button>
+                                                <div class="qty-display" id="qty_<?php echo $item['cart_id']; ?>">
+                                                    <?php echo $item['quantity']; ?>
+                                                </div>
+                                                <button type="button" class="qty-btn-ajax plus"
+                                                    data-cart-id="<?php echo $item['cart_id']; ?>">+</button>
+                                            </div>
+
+                                            <div class="text-right" style="min-width: 120px;">
+                                                <small style="display:block; opacity: 0.7;">Subtotal</small>
+                                                <div class="product-price item-total" id="total_<?php echo $item['cart_id']; ?>"
+                                                    style="font-weight: 700; font-size: 1.15rem; color: var(--fest-primary);">
+                                                    <?php echo formatPrice($price * $item['quantity']); ?>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="cart-qty-control">
-                                        <button type="button" class="qty-btn minus"
-                                            data-display="qty_<?php echo $item['cart_id']; ?>" data-autosubmit="true">-</button>
-                                        <input type="hidden" name="cart[<?php echo $item['cart_id']; ?>]"
-                                            value="<?php echo $item['quantity']; ?>" class="qty-input" min="1"
-                                            max="<?php echo max(1, $item['stock'] + 10); ?>">
-                                        <div class="qty-display" id="qty_<?php echo $item['cart_id']; ?>">
-                                            <?php echo $item['quantity']; ?>
-                                        </div>
-                                        <button type="button" class="qty-btn plus"
-                                            data-display="qty_<?php echo $item['cart_id']; ?>" data-autosubmit="true">+</button>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="product-price mb-1">
-                                            <?php echo formatPrice($price * $item['quantity']); ?>
-                                        </div>
-                                        <!-- Remove single form inside the loop -->
+
+                                        <button type="button" class="remove-item-btn" style="margin-top: 0.5rem;"
+                                            onclick="removeCartItem(<?php echo $item['cart_id']; ?>)">
+                                            <span style="margin-right: 4px;">🗑️</span> Remove Item
+                                        </button>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
                     </form>
 
-                    <!-- Remove buttons outside the main update form using a tiny separate form per item -->
-                    <?php foreach ($cartItems as $item): ?>
-                        <form action="cart.php" method="POST" class="hidden" id="remove-form-<?php echo $item['cart_id']; ?>">
-                            <input type="hidden" name="action" value="remove">
-                            <input type="hidden" name="cart_id" value="<?php echo $item['cart_id']; ?>">
-                        </form>
-                        <!-- In a real app we'd place this inside the cart item via absolute positioning to bypass nested form rules -->
-                        <div
-                            style="text-align:right; margin-top:-2.5rem; margin-right: 1.2rem; margin-bottom: 2rem; position:relative; z-index:10;">
-                            <button type="button"
-                                onclick="document.getElementById('remove-form-<?php echo $item['cart_id']; ?>').submit()"
-                                class="text-faint" style="font-size:0.8rem; text-decoration:underline;">Remove
-                                <?php echo htmlspecialchars($item['name']); ?>
-                            </button>
-                        </div>
-                    <?php endforeach; ?>
-
+                    <!-- Hidden real remove forms -->
+                    <div id="removeFormsWrap" style="display:none;">
+                        <?php foreach ($cartItems as $item): ?>
+                            <form action="cart.php" method="POST" id="remove-form-<?php echo $item['cart_id']; ?>">
+                                <input type="hidden" name="action" value="remove">
+                                <input type="hidden" name="cart_id" value="<?php echo $item['cart_id']; ?>">
+                            </form>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
 
-                <!-- Right: Order Summary Expanded -->
-                <div>
-                    <div class="cart-order-summary"
-                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 2rem;">
-                        <!-- Left Side of Summary Box -->
-                        <div>
-                            <h3 class="mb-2">Order Summary</h3>
-                            <div class="summary-row">
-                                <span class="text-muted">Subtotal (
-                                    <?php echo count($cartItems); ?> items)
-                                </span>
-                                <span>
-                                    <?php echo formatPrice($subtotal); ?>
-                                </span>
-                            </div>
-                            <?php if ($discountAmt > 0): ?>
-                                <div class="summary-row" style="color:#2ecc71;">
-                                    <span>Discount (
-                                        <?php echo $_SESSION['coupon_discount']; ?>%)
-                                    </span>
-                                    <span>-
-                                        <?php echo formatPrice($discountAmt); ?>
-                                    </span>
-                                </div>
-                            <?php endif; ?>
-                            <div class="summary-row" id="shipping-row"
-                                style="display: <?php echo $shipping > 0 ? 'flex' : 'none'; ?>;">
-                                <span class="text-muted">Delivery Charge</span>
-                                <span id="shipping-display">
-                                    <?php echo formatPrice($shipping); ?>
-                                </span>
-                            </div>
+                <!-- Right Column: Order Summary & Checkout -->
+                <div class="cart-summary-column">
+                    <div class="cart-order-summary">
+                        <form action="cart.php" method="POST" id="checkoutForm">
+                            <input type="hidden" name="action" value="checkout" id="formAction">
 
-                            <!-- Coupon Block -->
-                            <div
-                                style="margin: 1.2rem 0; padding: 1rem; border: 1px dashed var(--fest-primary); border-radius: var(--radius-card); background: var(--bg-deep);">
-                                <h4 class="mb-1" style="font-size:0.95rem;">Have a Coupon?</h4>
-                                <?php if (isset($_SESSION['coupon_code'])): ?>
-                                    <div class="flex items-center flex-between"
-                                        style="background: rgba(46,204,113,0.1); padding:0.8rem; border-radius:8px; border:1px solid rgba(46,204,113,0.3);">
-                                        <div>
-                                            <strong style="color:#2ecc71;">
-                                                <?php echo htmlspecialchars($_SESSION['coupon_code']); ?>
-                                            </strong> applied
-                                            <div style="font-size:0.75rem; color:var(--text-muted);">-
-                                                <?php echo $_SESSION['coupon_discount']; ?>% off
-                                            </div>
+                            <!-- Top Row: Totals and Address -->
+                            <div class="summary-top-row">
+                                <!-- Order Totals Box -->
+                                <div class="summary-box">
+                                    <h3 class="mb-2" style="border-bottom: 1px solid var(--border); padding-bottom: 1rem;">Order Totals</h3>
+                                    <div class="summary-details">
+                                        <div class="summary-row">
+                                            <span class="text-muted" id="subtotal-label">Subtotal (<?php echo count($cartItems); ?> items)</span>
+                                            <span id="subtotal-display" style="font-weight: 600;"><?php echo formatPrice($subtotal); ?></span>
                                         </div>
-                                        <form action="cart.php" method="POST" style="margin: 0;">
-                                            <input type="hidden" name="action" value="remove_coupon">
-                                            <button type="submit" class="btn btn-outline btn-sm">Remove</button>
-                                        </form>
+
+                                        <?php if ($discountAmt > 0): ?>
+                                            <div class="summary-row" style="color:#2ecc71;">
+                                                <span>Discount (<?php echo $_SESSION['coupon_discount']; ?>%)</span>
+                                                <span>-<?php echo formatPrice($discountAmt); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <div class="summary-row" id="shipping-row" style="display: <?php echo $shipping > 0 ? 'flex' : 'none'; ?>;">
+                                            <span class="text-muted">Delivery Charge</span>
+                                            <span id="shipping-display" style="font-weight: 600;"><?php echo formatPrice($shipping); ?></span>
+                                        </div>
+
+                                        <!-- Coupon Block -->
+                                        <div style="margin: 1.5rem 0; padding: 1.2rem; border: 1px dashed var(--fest-primary); border-radius: 12px; background: var(--bg-deep);">
+                                            <h4 class="mb-1" style="font-size:0.9rem;">Have a Coupon?</h4>
+                                            <?php if (isset($_SESSION['coupon_code'])): ?>
+                                                <div class="flex items-center flex-between" style="background: rgba(46,204,113,0.1); padding:0.8rem; border-radius:8px; border:1px solid rgba(46,204,113,0.3);">
+                                                    <div>
+                                                        <strong style="color:#2ecc71;"><?php echo htmlspecialchars($_SESSION['coupon_code']); ?></strong>
+                                                        <div style="font-size:0.75rem; color:var(--text-muted);">-<?php echo $_SESSION['coupon_discount']; ?>% off</div>
+                                                    </div>
+                                                    <button type="button" onclick="document.getElementById('removeCouponForm').submit();" class="btn btn-outline btn-sm" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;">Remove</button>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="coupon-row" style="margin: 0; display: flex; gap: 0.5rem;">
+                                                    <input type="text" id="couponCodeInput" class="form-control" placeholder="Code..." style="padding: 0.5rem;">
+                                                    <button type="button" onclick="applyCoupon()" class="btn btn-outline" style="padding: 0.5rem 1rem;">Apply</button>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <div class="divider" style="margin: 1.5rem 0;"></div>
+
+                                        <div class="summary-row" id="total-row" style="display: <?php echo $total > 0 ? 'flex' : 'none'; ?>; margin-bottom: 0.5rem;">
+                                            <span style="font-size: 1rem; font-weight: 700; color: var(--text);">Total Payable</span>
+                                            <span class="summary-total" id="total-display" style="font-size: 1.2rem; color: var(--fest-primary);"><?php echo formatPrice($total); ?></span>
+                                        </div>
                                     </div>
-                                <?php else: ?>
-                                    <form action="cart.php" method="POST" class="coupon-row" style="margin: 0;">
-                                        <input type="hidden" name="action" value="apply_coupon">
-                                        <input type="text" name="coupon_code" class="form-control"
-                                            placeholder="Enter code (e.g., FESTIVE10)">
-                                        <button type="submit" class="btn btn-outline">Apply</button>
-                                    </form>
-                                <?php endif; ?>
-                            </div>
+                                </div>
 
-                            <div class="divider"></div>
-
-                            <div class="summary-row" id="total-row"
-                                style="display: <?php echo $total > 0 ? 'flex' : 'none'; ?>;">
-                                <span class="text-muted">Total Payable</span>
-                                <span class="summary-total" id="total-display">
-                                    <?php echo formatPrice($total); ?>
-                                </span>
-                            </div>
-
-
-                        </div>
-
-                        <!-- Right Side of Summary Box: Delivery & Payment -->
-                        <div>
-                            <!-- Checkout Form -->
-                            <form action="cart.php" method="POST" id="checkoutForm">
-                                <input type="hidden" name="action" value="checkout" id="formAction">
-
-                                <div class="form-group mb-3">
-                                    <h3 class="mb-2" style="font-size:1.1rem; margin-top:0;">Delivery Address</h3>
-
-                                    <p class="text-faint mt-2 mb-2" style="font-size:0.8rem;">
-                                        <b>Note:</b> Delivery inside Kathmandu Valley is Rs.50 and outside the valley would
-                                        be Rs.150.
+                                <!-- Delivery Address Box -->
+                                <div class="summary-box delivery-address-section">
+                                    <h3 class="mb-2" style="border-bottom: 1px solid var(--border); padding-bottom: 1rem;">Delivery Address</h3>
+                                    <p class="text-faint mb-2" style="font-size:0.75rem;">
+                                        <b>Rate:</b> Rs.50 (Kathmandu) / Rs.150 (Outside)
                                     </p>
 
-                                    <select name="province" id="provinceSelect" class="form-control mb-half" required>
-                                        <option value="">Select Province</option>
-                                    </select>
-
-                                    <select name="district" id="districtSelect" class="form-control mb-half" required
-                                        disabled>
-                                        <option value="">Select District</option>
-                                    </select>
-
-                                    <select name="municipality" id="municipalitySelect" class="form-control mb-half"
-                                        required disabled>
-                                        <option value="">Select Municipality</option>
-                                    </select>
-
-                                    <input type="text" name="street_address" class="form-control"
-                                        placeholder="Street, Landmark, Tole..." required id="streetAddress">
-                                </div>
-
-                                <div class="form-group">
-                                    <label class="form-label"
-                                        style="font-size:1.1rem; font-weight:700; color:var(--text-primary); margin-bottom:0.6rem;">Payment
-                                        Method</label>
-                                    <div class="payment-methods">
-
-                                        <!-- Cash on Delivery -->
-                                        <label class="payment-option" id="cod-option">
-                                            <input type="radio" name="payment_method" value="cod" checked id="pay_cod">
-                                            <div class="payment-option-inner">
-                                                <span class="payment-icon">💵</span>
-                                                <div>
-                                                    <div class="payment-name">Cash on Delivery</div>
-                                                    <div class="payment-desc">Pay when your order arrives</div>
-                                                </div>
-                                            </div>
-                                        </label>
-
-                                        <!-- Khalti -->
-                                        <label class="payment-option" id="khalti-option">
-                                            <input type="radio" name="payment_method" value="khalti" id="pay_khalti">
-                                            <div class="payment-option-inner">
-                                                <span class="payment-icon">💜</span>
-                                                <div>
-                                                    <div class="payment-name">Pay with Khalti</div>
-                                                    <div class="payment-desc">Fast &amp; secure digital payment</div>
-                                                </div>
-                                                <span
-                                                    style="margin-left:auto;background:linear-gradient(135deg,#5c35d9,#8b5cf6);color:#fff;padding:0.15rem 0.55rem;border-radius:12px;font-size:0.7rem;font-weight:700;">LIVE</span>
-                                            </div>
-                                        </label>
-
+                                    <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                                        <select name="province" id="provinceSelect" class="form-control" required>
+                                            <option value="">Select Province</option>
+                                        </select>
+                                        <select name="district" id="districtSelect" class="form-control" required disabled>
+                                            <option value="">Select District</option>
+                                        </select>
+                                        <select name="municipality" id="municipalitySelect" class="form-control" required disabled>
+                                            <option value="">Select Municipality</option>
+                                        </select>
+                                        <input type="text" name="street_address" class="form-control" placeholder="Street, Landmark..." required>
                                     </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-full mt-2" id="checkoutBtn"
-                                    style="padding:1rem; font-size:1.1rem;">Confirm Order</button>
-                            </form>
-                        </div>
-                    </div> <!-- /End Expanded Order Summary -->
+                            </div>
 
-                    <style>
-                        .payment-methods {
-                            display: flex;
-                            flex-direction: column;
-                            gap: 0.6rem;
-                        }
+                            <!-- Middle Row: Payment Method Spanning -->
+                            <div class="summary-box summary-payment-row">
+                                <h4 class="mb-2" style="font-size: 1.1rem; color: var(--text); text-align: center;">Payment Method</h4>
+                                <div class="payment-methods">
+                                    <label class="payment-option">
+                                        <input type="radio" name="payment_method" value="cod" checked>
+                                        <div class="payment-option-inner">
+                                            <span class="payment-icon">💵</span>
+                                            <div>
+                                                <div class="payment-name">Cash on Delivery</div>
+                                                <div class="payment-desc">Pay at door</div>
+                                            </div>
+                                        </div>
+                                    </label>
 
-                        .payment-option {
-                            cursor: pointer;
-                            border: 1.5px solid var(--border);
-                            border-radius: 10px;
-                            padding: 0.9rem 1rem;
-                            transition: border-color 0.2s, background 0.2s;
-                            display: block;
-                        }
+                                    <label class="payment-option">
+                                        <input type="radio" name="payment_method" value="khalti">
+                                        <div class="payment-option-inner">
+                                            <span class="payment-icon">💜</span>
+                                            <div>
+                                                <div class="payment-name">Khalti Digital</div>
+                                                <div class="payment-desc">Secure online</div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
 
-                        .payment-option:has(input:checked) {
-                            border-color: #8b5cf6;
-                            background: rgba(139, 92, 246, 0.07);
-                        }
+                            <!-- Bottom Row: Confirm Action -->
+                            <div class="summary-action-row">
+                                <button type="submit" class="btn btn-primary" id="checkoutBtn"
+                                    style="padding: 1.2rem 3rem; font-size: 1.1rem; font-weight: 700; border-radius: 12px; min-width: 300px;">
+                                    Confirm Order
+                                </button>
+                            </div>
+                        </form>
 
-                        .payment-option input[type=radio] {
-                            display: none;
-                        }
+                        <!-- Hidden forms for AJAX-like actions without nested forms -->
+                        <form id="removeCouponForm" action="cart.php" method="POST" style="display:none;">
+                            <input type="hidden" name="action" value="remove_coupon">
+                        </form>
+                        <form id="applyCouponForm" action="cart.php" method="POST" style="display:none;">
+                            <input type="hidden" name="action" value="apply_coupon">
+                            <input type="hidden" name="coupon_code" id="hiddenCouponCode">
+                        </form>
 
-                        .payment-option-inner {
-                            display: flex;
-                            align-items: center;
-                            gap: 0.8rem;
-                        }
-
-                        .payment-icon {
-                            font-size: 1.3rem;
-                        }
-
-                        .payment-name {
-                            font-weight: 600;
-                            font-size: 0.92rem;
-                        }
-
-                        .payment-desc {
-                            font-size: 0.75rem;
-                            color: var(--text-muted);
-                            margin-top: 0.1rem;
-                        }
-                    </style>
-
-                    <style>
-                        .mb-half {
-                            margin-bottom: 0.5rem;
-                        }
-
-                        select.form-control:disabled {
-                            opacity: 0.5;
-                            cursor: not-allowed;
-                        }
-                    </style>
-
-                    <script>
-                        (function () {
-                            var form = document.getElementById('checkoutForm');
-                            var btn = document.getElementById('checkoutBtn');
-                            var radios = document.querySelectorAll('input[name="payment_method"]');
-
-                            // === Payment method toggle ===
-                            function updateForm() {
-                                var method = document.querySelector('input[name="payment_method"]:checked').value;
-                                if (method === 'khalti') {
-                                    form.action = '../Payment/initiate.php';
-                                    document.getElementById('formAction').disabled = true;
-                                    btn.textContent = '\uD83D\uDC9C Pay with Khalti';
-                                    btn.style.background = 'linear-gradient(135deg, #5c35d9, #8b5cf6)';
-                                } else {
-                                    form.action = 'cart.php';
-                                    document.getElementById('formAction').disabled = false;
-                                    btn.textContent = 'Confirm Order';
-                                    btn.style.background = '';
-                                }
+                        <script>
+                            function applyCoupon() {
+                                const code = document.getElementById('couponCodeInput').value;
+                                if (!code) return;
+                                document.getElementById('hiddenCouponCode').value = code;
+                                document.getElementById('applyCouponForm').submit();
                             }
-                            radios.forEach(function (r) { r.addEventListener('change', updateForm); });
-                            updateForm();
-
-                            // === Cascading address dropdowns ===
-                            var addressData = null;
-                            var provinceEl = document.getElementById('provinceSelect');
-                            var districtEl = document.getElementById('districtSelect');
-                            var municipalityEl = document.getElementById('municipalitySelect');
-
-                            fetch('../assets/js/nepal-address.json')
-                                .then(function (r) { return r.json(); })
-                                .then(function (data) {
-                                    addressData = data;
-                                    Object.keys(data).forEach(function (prov) {
-                                        var opt = document.createElement('option');
-                                        opt.value = prov;
-                                        opt.textContent = prov;
-                                        provinceEl.appendChild(opt);
-                                    });
-                                });
-
-                            provinceEl.addEventListener('change', function () {
-                                districtEl.innerHTML = '<option value="">Select District</option>';
-                                municipalityEl.innerHTML = '<option value="">Select Municipality</option>';
-                                districtEl.disabled = true;
-                                municipalityEl.disabled = true;
-
-                                var prov = this.value;
-                                if (prov && addressData && addressData[prov]) {
-                                    Object.keys(addressData[prov]).forEach(function (dist) {
-                                        var opt = document.createElement('option');
-                                        opt.value = dist;
-                                        opt.textContent = dist;
-                                        districtEl.appendChild(opt);
-                                    });
-                                    districtEl.disabled = false;
-                                }
-                            });
-
-                            districtEl.addEventListener('change', function () {
-                                municipalityEl.innerHTML = '<option value="">Select Municipality</option>';
-                                municipalityEl.disabled = true;
-
-                                var prov = provinceEl.value;
-                                var dist = this.value;
-                                if (prov && dist && addressData && addressData[prov] && addressData[prov][dist]) {
-                                    addressData[prov][dist].forEach(function (mun) {
-                                        var opt = document.createElement('option');
-                                        opt.value = mun;
-                                        opt.textContent = mun;
-                                        municipalityEl.appendChild(opt);
-                                    });
-                                    municipalityEl.disabled = false;
-                                }
-                            });
-                        })();
-                    </script>
+                        </script>
+                    </div>
                 </div>
             </div>
 
-        </div>
-    <?php endif; ?>
+            <style>
+                .mb-half {
+                    margin-bottom: 0.5rem;
+                }
 
-    </div>
+                select.form-control:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+            </style>
+
+            <script>
+                (function () {
+                    var form = document.getElementById('checkoutForm');
+                    var btn = document.getElementById('checkoutBtn');
+                    var radios = document.querySelectorAll('input[name="payment_method"]');
+                    var selectAll = document.getElementById('selectAllItems');
+                    var itemCheckboxes = document.querySelectorAll('.cart-item .item-checkbox');
+                    var provinceEl = document.getElementById('provinceSelect');
+                    var districtEl = document.getElementById('districtSelect');
+                    var municipalityEl = document.getElementById('municipalitySelect');
+                    var subtotalLabel = document.getElementById('subtotal-label');
+                    var subtotalDisplay = document.getElementById('subtotal-display');
+                    var shippingDisplay = document.getElementById('shipping-display');
+                    var totalDisplay = document.getElementById('total-display');
+                    var addressData = null;
+
+                    // Global Remove Function
+                    window.removeCartItem = function (cartId) {
+                        if (confirm("Remove this item from your cart?")) {
+                            document.getElementById('remove-form-' + cartId).submit();
+                        }
+                    }
+
+                    function updateCalculation() {
+                        var subtotal = 0;
+                        var selectedCount = 0;
+
+                        itemCheckboxes.forEach(function (cb) {
+                            var itemRow = cb.closest('.cart-item');
+                            if (!itemRow) return;
+
+                            if (cb.checked) {
+                                var cartId = cb.getAttribute('data-cart-id');
+                                var qtyEl = document.getElementById('qty_' + cartId);
+                                if (!qtyEl) return;
+
+                                var qty = parseInt(qtyEl.textContent);
+                                var price = parseFloat(itemRow.getAttribute('data-price'));
+                                subtotal += price * qty;
+                                selectedCount++;
+                                itemRow.classList.remove('unselected');
+                            } else {
+                                itemRow.classList.add('unselected');
+                            }
+                        });
+
+                        // Dynamic Shipping Logic: Rs. 50 for Kathmandu, Rs. 150 otherwise
+                        var prov = provinceEl.value;
+                        var dist = districtEl.value;
+                        var ship = 0;
+
+                        if (selectedCount > 0) {
+                            ship = 150; // Default
+                            if (prov === 'Bagmati Pradesh' && dist === 'Kathmandu') {
+                                ship = 50;
+                            }
+                        }
+
+                        var discountPercent = <?php echo (float) ($_SESSION['coupon_discount'] ?? 0); ?>;
+                        var discountAmt = (subtotal * discountPercent / 100);
+                        var total = subtotal - discountAmt + ship;
+
+                        if (subtotalLabel) subtotalLabel.textContent = 'Subtotal (' + selectedCount + ' items)';
+                        if (subtotalDisplay) subtotalDisplay.textContent = 'Rs. ' + subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        if (shippingDisplay) shippingDisplay.textContent = 'Rs. ' + ship.toFixed(2);
+                        if (totalDisplay) totalDisplay.textContent = 'Rs. ' + total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                        // Disable checkout if no items selected
+                        btn.disabled = (selectedCount === 0);
+                        btn.style.opacity = (selectedCount === 0) ? '0.5' : '1';
+                        btn.style.cursor = (selectedCount === 0) ? 'not-allowed' : 'pointer';
+                    }
+
+                    // Selection Toggles
+                    if (selectAll) {
+                        selectAll.addEventListener('change', function () {
+                            const isChecked = this.checked;
+                            itemCheckboxes.forEach(cb => cb.checked = isChecked);
+                            updateCalculation();
+
+                            // AJAX to persist
+                            const formData = new FormData();
+                            formData.append('action', 'select_all_ajax');
+                            formData.append('selected', isChecked);
+                            fetch('cart.php', { method: 'POST', body: formData });
+                        });
+                    }
+
+                    itemCheckboxes.forEach(cb => {
+                        cb.addEventListener('change', function () {
+                            const cartId = this.dataset.cartId;
+                            const isChecked = this.checked;
+                            var allChecked = Array.from(itemCheckboxes).every(c => c.checked);
+                            if (selectAll) selectAll.checked = allChecked;
+                            updateCalculation();
+
+                            // AJAX to persist
+                            const formData = new FormData();
+                            formData.append('action', 'toggle_selection_ajax');
+                            formData.append('cart_id', cartId);
+                            formData.append('selected', isChecked);
+                            fetch('cart.php', { method: 'POST', body: formData });
+                        });
+                    });
+
+                    // Payment method toggle
+                    function updateForm() {
+                        var method = document.querySelector('input[name="payment_method"]:checked').value;
+                        if (method === 'khalti') {
+                            form.action = '../Payment/initiate.php';
+                            document.getElementById('formAction').disabled = true;
+                            btn.innerHTML = '💜 Pay with Khalti';
+                            btn.style.background = 'linear-gradient(135deg, #5c35d9, #8b5cf6)';
+                        } else {
+                            form.action = 'cart.php';
+                            document.getElementById('formAction').disabled = false;
+                            btn.textContent = 'Confirm Order';
+                            btn.style.background = '';
+                        }
+                    }
+                    radios.forEach(r => r.addEventListener('change', updateForm));
+                    updateForm();
+
+                    // Cascading address dropdowns
+                    fetch('../assets/js/nepal-address.json')
+                        .then(r => r.json())
+                        .then(data => {
+                            addressData = data;
+                            Object.keys(data).forEach(prov => {
+                                var opt = document.createElement('option');
+                                opt.value = prov; opt.textContent = prov;
+                                provinceEl.appendChild(opt);
+                            });
+                        });
+
+                    provinceEl.addEventListener('change', function () {
+                        districtEl.innerHTML = '<option value="">Select District</option>';
+                        municipalityEl.innerHTML = '<option value="">Select Municipality</option>';
+                        districtEl.disabled = municipalityEl.disabled = true;
+
+                        var prov = this.value;
+                        if (prov && addressData && addressData[prov]) {
+                            Object.keys(addressData[prov]).forEach(dist => {
+                                var opt = document.createElement('option');
+                                opt.value = dist; opt.textContent = dist;
+                                districtEl.appendChild(opt);
+                            });
+                            districtEl.disabled = false;
+                        }
+                        updateCalculation();
+                    });
+
+                    districtEl.addEventListener('change', function () {
+                        municipalityEl.innerHTML = '<option value="">Select Municipality</option>';
+                        municipalityEl.disabled = true;
+
+                        var prov = provinceEl.value;
+                        var dist = this.value;
+                        if (prov && dist && addressData && addressData[prov] && addressData[prov][dist]) {
+                            addressData[prov][dist].forEach(mun => {
+                                var opt = document.createElement('option');
+                                opt.value = mun; opt.textContent = mun;
+                                municipalityEl.appendChild(opt);
+                            });
+                            municipalityEl.disabled = false;
+                        }
+                        updateCalculation();
+                    });
+
+                    // Qty Buttons AJAX logic
+                    document.querySelectorAll('.qty-btn-ajax').forEach(btn => {
+                        btn.addEventListener('click', function () {
+                            const cartId = this.dataset.cartId;
+                            const display = document.getElementById('qty_' + cartId);
+                            const totalEl = document.getElementById('total_' + cartId);
+                            let currentQty = parseInt(display.textContent);
+                            let newQty = this.classList.contains('plus') ? currentQty + 1 : currentQty - 1;
+
+                            if (newQty < 1) return;
+
+                            // Update UI immediately (optimistic)
+                            display.textContent = newQty;
+                            updateCalculation();
+
+                            // AJAX request
+                            const formData = new FormData();
+                            formData.append('action', 'update_qty_ajax');
+                            formData.append('cart_id', cartId);
+                            formData.append('quantity', newQty);
+
+                            fetch('cart.php', {
+                                method: 'POST',
+                                body: formData
+                            })
+                                .then(r => r.json())
+                                .then(res => {
+                                    if (res.success) {
+                                        totalEl.textContent = res.item_total;
+                                        updateCalculation();
+                                    }
+                                })
+                                .catch(err => {
+                                    console.error("Update failed", err);
+                                    // Revert UI if failed
+                                    display.textContent = currentQty;
+                                    updateCalculation();
+                                });
+                        });
+                    });
+
+                    updateCalculation();
+                })();
+            </script>
+        <?php endif; ?>
+    </div> <!-- .page-wrapper -->
 
     <script src="../assets/js/main.js"></script>
 </body>

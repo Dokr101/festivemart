@@ -57,7 +57,7 @@ $tab = $_GET['tab'] ?? 'profile';
             <li><a href="cart.php" class="cart-badge">Cart <span class="cart-count">
                         <?php echo getCartCount(); ?>
                     </span></a></li>
-            <li><a href="../auth/logout.php">Logout</a></li>
+            <li><a href="../auth/logout.php" class="logout-btn"><span class="logout-icon">🚪</span> Logout</a></li>
         </ul>
     </nav>
 
@@ -85,28 +85,27 @@ $tab = $_GET['tab'] ?? 'profile';
 
             <!-- Sidebar -->
             <aside class="account-sidebar">
-                <div class="account-nav-link <?php echo $tab === 'profile' ? 'active' : ''; ?>" data-target="panel-profile">
+                <div class="account-nav-link <?php echo $tab === 'profile' ? 'active' : ''; ?>"
+                    data-target="panel-profile">
                     <span>👤</span> Profile Settings
                 </div>
-                <div class="account-nav-link <?php echo $tab === 'orders' ? 'active' : ''; ?>" data-target="panel-orders">
+                <div class="account-nav-link <?php echo $tab === 'orders' ? 'active' : ''; ?>"
+                    data-target="panel-orders">
                     <span>📦</span> Order History
                 </div>
-                <div class="divider"></div>
-                <a href="../auth/logout.php" class="account-nav-link" style="color: #e74c3c;">
-                    <span>🚪</span> Logout
-                </a>
             </aside>
 
             <!-- Main Details -->
             <main>
                 <!-- Profile Panel -->
                 <div id="panel-profile" class="account-panel <?php echo $tab === 'profile' ? 'active' : ''; ?>">
-                    <div class="card p-3">
-                        <h3 class="mb-2">Personal Information</h3>
+                    <div class="card" style="padding: 3.5rem;">
+                        <h3 class="text-center mb-4" style="color: var(--fest-primary); font-size: 1.5rem;">Personal
+                            Information</h3>
                         <form action="account.php?tab=profile" method="POST">
                             <input type="hidden" name="update_profile" value="1">
 
-                            <div class="grid-2 mb-2">
+                            <div class="grid-2 mb-3">
                                 <div class="form-group mb-0">
                                     <label class="form-label">Full Name</label>
                                     <input type="text" name="full_name" class="form-control"
@@ -119,7 +118,7 @@ $tab = $_GET['tab'] ?? 'profile';
                                 </div>
                             </div>
 
-                            <div class="grid-2 mb-3">
+                            <div class="grid-2 mb-4">
                                 <div class="form-group mb-0">
                                     <label class="form-label">Email Address</label>
                                     <input type="email" name="email" class="form-control"
@@ -132,7 +131,10 @@ $tab = $_GET['tab'] ?? 'profile';
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <div class="text-center mt-2">
+                                <button type="submit" class="btn btn-primary" style="padding: 0.8rem 3.5rem;">Save
+                                    Changes</button>
+                            </div>
                         </form>
                     </div>
                 </div>

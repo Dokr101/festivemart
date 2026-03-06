@@ -44,7 +44,7 @@ $themeStyle = festivalThemeStyle($filterFestival);
                 <li><a href="<?php echo isAdmin() ? '../admin/dashboard.php' : 'account.php'; ?>">Dashboard</a></li>
                 <li><a href="cart.php" class="cart-badge">Cart <span
                             class="cart-count"><?php echo getCartCount(); ?></span></a></li>
-                <li><a href="../auth/logout.php">Logout</a></li>
+                <li><a href="../auth/logout.php" class="logout-btn"><span class="logout-icon">🚪</span> Logout</a></li>
             <?php else: ?>
                 <li><a href="../auth/login.php" class="btn-nav-cta">Log In</a></li>
             <?php endif; ?>

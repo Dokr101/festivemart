@@ -4,22 +4,6 @@ requireAdmin();
 
 $success = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    if ($_POST['action'] === 'toggle_role') {
-        $user_id = (int) $_POST['user_id'];
-        if ($user_id !== $_SESSION['user_id']) { // Can't change own role
-            $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-            $stmt->execute([$user_id]);
-            $currentReale = $stmt->fetchColumn();
-
-            $newRole = $currentReale === 'admin' ? 'customer' : 'admin';
-            $update = $pdo->prepare("UPDATE users SET role = ? WHERE id = ?");
-            $update->execute([$newRole, $user_id]);
-            $success = "User role updated successfully.";
-        }
-    }
-}
-
 // Fetch users with order stats
 $sql = "SELECT u.id, u.username, u.full_name, u.email, u.phone, u.role, u.created_at,
         COUNT(o.id) as total_orders,
@@ -95,7 +79,6 @@ $users = $pdo->query($sql)->fetchAll();
                             <th>Orders</th>
                             <th>Total Spent</th>
                             <th>Joined</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,20 +117,6 @@ $users = $pdo->query($sql)->fetchAll();
                                 </td>
                                 <td class="text-muted">
                                     <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
-                                </td>
-                                <td>
-                                    <?php if ($user['id'] !== $_SESSION['user_id']): ?>
-                                        <form action="users.php" method="POST" onsubmit="return confirm('Change user role?');">
-                                            <input type="hidden" name="action" value="toggle_role">
-                                            <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                                            <button type="submit" class="btn btn-outline btn-xs">
-                                                Make
-                                                <?php echo $user['role'] === 'admin' ? 'Customer' : 'Admin'; ?>
-                                            </button>
-                                        </form>
-                                    <?php else: ?>
-                                        <span class="text-muted" style="font-size:0.75rem;">(You)</span>
-                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
