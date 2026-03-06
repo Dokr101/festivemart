@@ -26,7 +26,14 @@ $date = date('F j, Y, g:i a', strtotime($order['created_at']));
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Purchase Bill - Order #<?php echo $order['id']; ?></title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        /* Local Inter Font for Offline Use */
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 400 700;
+            font-display: swap;
+            src: url('../assets/fonts/inter/inter-latin.woff2') format('woff2');
+        }
 
         body {
             font-family: 'Inter', sans-serif;
