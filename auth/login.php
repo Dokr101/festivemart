@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    // --- SIGNUP LOGIC ---
+    // --- SIGNUP LOGIC (UPDATED with phone & username rules) ---
     elseif ($action === 'signup') {
         $fullName = trim($_POST['full_name'] ?? '');
         $username = trim($_POST['username'] ?? '');
@@ -67,17 +67,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($password !== $confirm_password) {
             $signup_error = "Passwords do not match.";
             $active_tab = 'signup';
-        } elseif (!preg_match('/^[A-Z ]+$/', $fullName)) {
-            $signup_error = "Full Name must be ONLY CAPITAL LETTERS and spaces.";
+        } elseif (!preg_match('/^[A-Z ]+$/', $fullName) || strlen($fullName) < 3) {
+            $signup_error = "Full Name must be ONLY CAPITAL LETTERS and spaces (min 3 chars).";
             $active_tab = 'signup';
-        } elseif (!preg_match('/^[a-zA-Z0-9]+$/', $username)) {
-            $signup_error = "Username must be alphanumeric.";
+        } elseif (!preg_match('/^[a-zA-Z0-9]+$/', $username) || strlen($username) < 4 || !preg_match('/[0-9]/', $username)) {
+            $signup_error = "Username must be alphanumeric, at least 4 characters, and contain at least one number.";
             $active_tab = 'signup';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $signup_error = "Invalid email format.";
             $active_tab = 'signup';
-        } elseif (!preg_match('/^\+977 (98|97)[0-9]{8}$/', $phone)) {
-            $signup_error = "Phone must be in format: +977 98xxxxxxxx";
+        } elseif (!preg_match('/^(98|97)[0-9]{8}$/', $phone)) {
+            $signup_error = "Phone must be 10 digits starting with 98 or 97.";
             $active_tab = 'signup';
         } elseif (strlen($password) < 6) {
             $signup_error = "Password must be at least 6 characters.";
@@ -111,6 +111,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Authentication - FestiVmart</title>
     <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .validation-message {
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+            min-height: 1.2rem;
+        }
+        .validation-message.error {
+            color: #dc3545;
+        }
+        .validation-message.success {
+            color: #28a745;
+        }
+        .input-wrap {
+            position: relative;
+        }
+    </style>
 </head>
 
 <body class="auth-page">
@@ -182,41 +198,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="hidden" name="action" value="signup">
                     <input type="text" name="website_url" style="display:none" tabindex="-1" autocomplete="off">
 
+                    <!-- Full Name -->
                     <div class="form-group">
-                        <label class="form-label">FULL NAME (CAPITAL LETTERS)</label>
-                        <input type="text" name="full_name" class="form-control" placeholder="RAM BAHADUR" required>
+                        <label class="form-label">FULL NAME (CAPITAL LETTERS, min 3 chars)</label>
+                        <input type="text" name="full_name" id="full_name" class="form-control" placeholder="RAM BAHADUR" required>
+                        <div class="validation-message" id="fullname-message"></div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Username (updated: must contain a number) -->
                         <div class="form-group">
-                            <label class="form-label">USERNAME</label>
-                            <input type="text" name="username" class="form-control" placeholder="ram123" required>
+                            <label class="form-label">USERNAME(min 4 chars)</label>
+                            <input type="text" name="username" id="username" class="form-control" placeholder="ram123" required>
+                            <div class="validation-message" id="username-message"></div>
                         </div>
+                        <!-- Phone (no +977) -->
                         <div class="form-group">
-                            <label class="form-label">PHONE</label>
+                            <label class="form-label">PHONE NUMBER</label>
                             <div class="input-wrap">
-                                <span class="input-prefix" style="color:var(--text-primary)">+977</span>
-                                <input type="text" name="phone_raw" class="form-control has-prefix"
-                                    placeholder="98XXXXXXXX" required>
-                                <input type="hidden" name="phone">
+                                <input type="text" name="phone_raw" id="phone_raw" class="form-control"
+                                    placeholder="98XXXXXXXX" required inputmode="numeric" pattern="\d*">
+                                <input type="hidden" name="phone" id="phone_hidden">
                             </div>
+                            <div class="validation-message" id="phone-message"></div>
                         </div>
                     </div>
 
+                    <!-- Email -->
                     <div class="form-group">
                         <label class="form-label">EMAIL ADDRESS</label>
-                        <input type="email" name="email" class="form-control" placeholder="ram@example.com" required>
+                        <input type="email" name="email" id="email" class="form-control" placeholder="ram@example.com" required>
+                        <div class="validation-message" id="email-message"></div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Password -->
                         <div class="form-group">
                             <label class="form-label">PASSWORD</label>
                             <div class="input-wrap">
                                 <input type="password" name="password" id="signupPass" class="form-control"
-                                    placeholder="Min 6 chars" required>
+                                    placeholder="Min 6 chars, 1 uppercase, 1 number, 1 symbol" required>
                                 <span class="input-icon toggle-password" data-target="signupPass">👁️</span>
                             </div>
+                            <div class="validation-message" id="password-message"></div>
                         </div>
+                        <!-- Confirm Password -->
                         <div class="form-group">
                             <label class="form-label">CONFIRM</label>
                             <div class="input-wrap">
@@ -224,18 +250,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     class="form-control" placeholder="••••••••" required>
                                 <span class="input-icon toggle-password" data-target="signupConfirmPass">👁️</span>
                             </div>
+                            <div class="validation-message" id="confirm-password-message"></div>
                         </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary w-full mt-2">Sign Up</button>
-
-
                 </form>
             </div>
         </div>
     </div>
 
     <script>
+        // Original tab switching and toggle password code (unchanged)
         document.querySelectorAll('.auth-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 const target = tab.dataset.target;
@@ -243,14 +269,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             });
         });
 
-        document.querySelector('.switch-to-signup').addEventListener('click', () => switchTab('signup'));
-        document.querySelector('.switch-to-login').addEventListener('click', () => switchTab('login'));
+        document.querySelector('.switch-to-signup')?.addEventListener('click', () => switchTab('signup'));
+        document.querySelector('.switch-to-login')?.addEventListener('click', () => switchTab('login'));
 
         function switchTab(target) {
             const card = document.querySelector('.auth-card');
             const oldHeight = card.offsetHeight;
             
-            // 1. Switch active states
             document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.auth-form-container').forEach(f => f.classList.remove('active'));
             
@@ -258,18 +283,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const targetContainer = document.getElementById(`${target}-container`);
             targetContainer.classList.add('active');
             
-            // 2. MEASURE: Temporarily get the natural height of the new content
             card.style.height = 'auto';
             const targetHeight = card.offsetHeight;
             
-            // 3. Reset to start height for animation
             card.style.height = oldHeight + 'px';
-            void card.offsetHeight; // Force reflow
+            void card.offsetHeight;
             
-            // 4. Animate to target
             card.style.height = targetHeight + 'px';
             
-            // 5. Cleanup
             const onEnd = (e) => {
                 if (e.propertyName === 'height') {
                     card.style.height = 'auto';
@@ -278,19 +299,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             };
             card.addEventListener('transitionend', onEnd);
 
-            // Update URL without reload
             const url = new URL(window.location);
             url.searchParams.set('mode', target);
             window.history.pushState({}, '', url);
         }
 
-        // Phone prefix handler
-        document.getElementById('signupForm')?.addEventListener('submit', function (e) {
-            const rawPhone = this.querySelector('input[name="phone_raw"]').value.trim();
-            this.querySelector('input[name="phone"]').value = '+977 ' + rawPhone;
-        });
-
-        // Toggle Password
+        // Toggle Password (unchanged)
         document.querySelectorAll('.toggle-password').forEach(btn => {
             btn.addEventListener('click', () => {
                 const input = document.getElementById(btn.dataset.target);
@@ -303,6 +317,156 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             });
         });
+
+        // ========== UPDATED: Real-time validation for signup form ==========
+        (function() {
+            const form = document.getElementById('signupForm');
+            if (!form) return;
+
+            function setMessage(elementId, message, isError = true) {
+                const msgDiv = document.getElementById(elementId);
+                if (msgDiv) {
+                    msgDiv.textContent = message;
+                    msgDiv.className = 'validation-message ' + (isError ? 'error' : 'success');
+                }
+            }
+
+            // 1. Full name: uppercase + only letters/spaces, min length 3
+            const fullNameInput = document.getElementById('full_name');
+            fullNameInput.addEventListener('input', function(e) {
+                let val = this.value;
+                this.value = val.toUpperCase();
+                val = this.value;
+                const regex = /^[A-Z ]*$/;
+                if (!regex.test(val)) {
+                    setMessage('fullname-message', 'Only capital letters and spaces allowed', true);
+                } else if (val.length > 0 && val.length < 3) {
+                    setMessage('fullname-message', 'Must be at least 3 characters', true);
+                } else {
+                    setMessage('fullname-message', val ? '✓ Valid' : '', false);
+                }
+            });
+
+            // 2. Username: lowercase + alphanumeric, min length 4, must contain a number
+            const usernameInput = document.getElementById('username');
+            usernameInput.addEventListener('input', function(e) {
+                let val = this.value;
+                this.value = val.toLowerCase();
+                val = this.value;
+                const regexAllowed = /^[a-z0-9]*$/;
+                if (!regexAllowed.test(val)) {
+                    setMessage('username-message', 'Only lowercase letters and numbers allowed', true);
+                } else if (val.length > 0 && val.length < 4) {
+                    setMessage('username-message', 'Must be at least 4 characters', true);
+                } else if (val.length >= 4 && !/[0-9]/.test(val)) {
+                    setMessage('username-message', 'Must contain at least one number', true);
+                } else {
+                    setMessage('username-message', val ? '✓ Valid' : '', false);
+                }
+            });
+
+            // 3. Phone: only digits, exactly 10, first two = 98 or 97 (no +977)
+            const phoneRaw = document.getElementById('phone_raw');
+            const phoneHidden = document.getElementById('phone_hidden');
+
+            phoneRaw.addEventListener('input', function(e) {
+                this.value = this.value.replace(/\D/g, '');
+            });
+
+            function validatePhone() {
+                let raw = phoneRaw.value.trim();
+                if (raw.length > 10) {
+                    raw = raw.slice(0, 10);
+                    phoneRaw.value = raw;
+                }
+                phoneHidden.value = raw; // store raw digits
+
+                if (raw.length === 0) {
+                    setMessage('phone-message', '', false);
+                } else if (raw.length < 2) {
+                    setMessage('phone-message', 'Waiting for first two digits...', true);
+                } else {
+                    const firstTwo = raw.slice(0, 2);
+                    if (firstTwo !== '98' && firstTwo !== '97') {
+                        setMessage('phone-message', 'Must start with 98 or 97', true);
+                    } else if (raw.length < 10) {
+                        setMessage('phone-message', 'Must be exactly 10 digits', true);
+                    } else {
+                        setMessage('phone-message', '✓ Valid', false);
+                    }
+                }
+            }
+            phoneRaw.addEventListener('input', validatePhone);
+            validatePhone();
+
+            // 4. Email: local part must contain letters and numbers, valid domain with TLD
+            const emailInput = document.getElementById('email');
+            emailInput.addEventListener('input', function(e) {
+                const val = this.value;
+                const atIndex = val.indexOf('@');
+                if (val.length === 0) {
+                    setMessage('email-message', '', false);
+                } else if (atIndex === -1) {
+                    setMessage('email-message', 'Missing @ symbol', true);
+                } else {
+                    const local = val.slice(0, atIndex);
+                    const domain = val.slice(atIndex + 1);
+                    if (local.length === 0) {
+                        setMessage('email-message', 'Local part cannot be empty', true);
+                    } else if (!/[a-zA-Z]/.test(local) || !/[0-9]/.test(local)) {
+                        setMessage('email-message', 'Local part must contain both letters and numbers', true);
+                    } else if (domain.length === 0) {
+                        setMessage('email-message', 'Domain cannot be empty', true);
+                    } else if (!domain.includes('.')) {
+                        setMessage('email-message', 'Domain must contain a dot', true);
+                    } else {
+                        const tld = domain.split('.').pop();
+                        const allowedTLDs = ['com', 'org', 'edu', 'net', 'gov', 'io', 'co'];
+                        if (!allowedTLDs.includes(tld.toLowerCase())) {
+                            setMessage('email-message', 'TLD must be .com, .org, .edu, etc.', true);
+                        } else {
+                            setMessage('email-message', '✓ Valid', false);
+                        }
+                    }
+                }
+            });
+
+            // 5. Password: min 6 chars, at least one uppercase, one number, one symbol
+            const passwordInput = document.getElementById('signupPass');
+            passwordInput.addEventListener('input', function(e) {
+                const val = this.value;
+                const errors = [];
+                if (val.length < 6) errors.push('at least 6 characters');
+                if (!/[A-Z]/.test(val)) errors.push('one uppercase letter');
+                if (!/[0-9]/.test(val)) errors.push('one number');
+                if (!/[^A-Za-z0-9]/.test(val)) errors.push('one symbol');
+                
+                if (val.length === 0) {
+                    setMessage('password-message', '', false);
+                } else if (errors.length > 0) {
+                    setMessage('password-message', 'Missing: ' + errors.join(', '), true);
+                } else {
+                    setMessage('password-message', '✓ Strong password', false);
+                }
+                validateConfirm();
+            });
+
+            // 6. Confirm password: match
+            const confirmInput = document.getElementById('signupConfirmPass');
+            function validateConfirm() {
+                const pass = passwordInput.value;
+                const confirm = confirmInput.value;
+                if (!confirm) {
+                    setMessage('confirm-password-message', '', false);
+                } else if (pass !== confirm) {
+                    setMessage('confirm-password-message', 'Passwords do not match', true);
+                } else {
+                    setMessage('confirm-password-message', '✓ Passwords match', false);
+                }
+            }
+            confirmInput.addEventListener('input', validateConfirm);
+            passwordInput.addEventListener('input', validateConfirm);
+        })();
     </script>
 </body>
 

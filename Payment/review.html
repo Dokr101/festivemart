@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FestiVmart Project Audit & Review</title>
+    <style>
+        @font-face {
+            font-family: 'Inter';
+            src: url('../assets/fonts/inter/inter-latin.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Poppins';
+            src: url('../assets/fonts/poppins/poppins-600.woff2') format('woff2');
+        }
+
+        :root {
+            --primary: #5c35d9;
+            --accent: #ff4757;
+            --success: #2ed573;
+            --warning: #ffa502;
+            --bg: #0a0a0f;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #e0e0e0;
+            --text-dim: #999;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px 20px;
+            background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #0a0a0f 70%);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        h1 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 3rem;
+            margin: 0;
+            background: linear-gradient(135deg, #fff 0%, #888 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            margin-top: 10px;
+        }
+
+        .section {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        h2 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.8rem;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+
+        .tag {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .tag-great { background: rgba(46, 213, 115, 0.15); color: var(--success); }
+        .tag-improve { background: rgba(255, 165, 2, 0.15); color: var(--warning); }
+        .tag-urgent { background: rgba(255, 71, 87, 0.15); color: var(--accent); }
+
+        ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        b { color: #fff; }
+
+        .roadmap-item {
+            border-left: 2px solid var(--primary);
+            padding-left: 20px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .roadmap-item::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 80px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>FestiVmart Audit</h1>
+        <p class="subtitle">A comprehensive review of Design, Logic, and Scalability</p>
+    </header>
+
+    <!-- SECTION: WHAT'S GREAT -->
+    <div class="section">
+        <h2 style="color: var(--success);"><span>🌟</span> What's Great</h2>
+        <div class="grid">
+            <div class="card">
+                <span class="tag tag-great">Design</span>
+                <h3>Premium Aesthetic</h3>
+                <p>The use of <b>glassmorphism</b> and <b>Inter/Poppins</b> typography creates a state-of-the-art feel that rivals major international e-commerce sites.</p>
+            </div>
+            <div class="card">
+                <span class="tag tag-great">UX</span>
+                <h3>Unified Auth Flow</h3>
+                <p>The tabbed login/signup mechanism is a masterclass in friction reduction. The <b>butter-smooth height transitions</b> make it feel alive.</p>
+            </div>
+            <div class="card">
+                <span class="tag tag-great">USP</span>
+                <h3>Festival Centricity</h3>
+                <p>The <b>dynamic theme engine</b> (Diyo for Diwali, etc.) is your biggest edge. It makes the site feel personal and culturally relevant in Nepal.</p>
+            </div>
+            <div class="card">
+                <span class="tag tag-great">Infrastructure</span>
+                <h3>Offline Reliability</h3>
+                <p>Localizing all fonts and scripts ensures the site is <b>blazing fast</b> and works without internet—critical for diverse connectivity scenarios.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION: AREAS TO IMPROVE -->
+    <div class="section">
+        <h2 style="color: var(--warning);"><span>🛠️</span> Areas to Improve</h2>
+        <div class="grid">
+            <div class="card">
+                <span class="tag tag-improve">Logic</span>
+                <h3>Real-time Input Feedback</h3>
+                <p>While the backend validation is robust, adding <b>client-side JS validation</b> (e.g. checking length as they type) would prevent errors BEFORE submission.</p>
+            </div>
+            <div class="card">
+                <span class="tag tag-improve">UI</span>
+                <h3>Filtering & Search</h3>
+                <p>The current Shop is clean, but as the catalog grows, users will need <b>Price Sliders</b> and <b>Category Multi-select</b> to find products faster.</p>
+            </div>
+            <div class="card">
+                <span class="tag tag-improve">Performance</span>
+                <h3>Image Optimization</h3>
+                <p>Uploaded images should ideally be automatically converted to <b>WebP format</b> to save bandwidth and improve load times on mobile.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION: URGENT ROADMAP -->
+    <div class="section">
+        <h2 style="color: var(--accent);"><span>🚀</span> Must-do Roadmap</h2>
+        
+        <div class="roadmap-item">
+            <span class="tag tag-urgent">Near Future</span>
+            <h3>Customer Social Proof</h3>
+            <p>Implement a <b>Reviews & Ratings</b> system. Users trust other users; seeing 5-stars on a product significantly increases conversion rates.</p>
+        </div>
+
+        <div class="roadmap-item">
+            <span class="tag tag-urgent">Near Future</span>
+            <h3>Order Tracking & Status</h3>
+            <p>Add a visual <b>timeline</b> in the User Account section (e.g. Processing → Shipped → Delivered) so users feel their money is safe after payment.</p>
+        </div>
+
+        <div class="roadmap-item">
+            <span class="tag tag-urgent">Technical</span>
+            <h3>CSRF Protection</h3>
+            <p>To make the site enterprise-ready, implement <b>CSRF tokens</b> on all POST forms to prevent malicious cross-site requests.</p>
+        </div>
+
+        <div class="roadmap-item">
+            <span class="tag tag-urgent">SEO</span>
+            <h3>Dynamic Meta Tags</h3>
+            <p>Ensure every product page has a unique <b>Meta Title and Description</b> so individual items show up nicely on Google searches.</p>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2026 FestiVmart. Prepared by Antigravity AI.
+    </footer>
+</div>
+
+</body>
+</html>

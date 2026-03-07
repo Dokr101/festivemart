@@ -1942,3 +1942,25 @@ select.form-control {
 .payment-option input[type="radio"]:checked + .payment-option-inner .payment-name {
     color: var(--fest-primary);
 }
+
+/* Real-time feedback colors */
+/* Feedback colors */
+.text-green-600 { color: #16a34a; }
+.text-red-600   { color: #dc2626; }
+
+.border-green-500 { border-color: #10b981 !important; }
+.border-red-500   { border-color: #ef4444 !important; }
+
+/* Feedback styling */
+#password-feedback,
+#confirm-feedback {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: color 0.2s ease;
+}
+
+/* Optional: better input focus */
+.form-control:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}

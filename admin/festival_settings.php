@@ -1,34 +1,59 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/../includes/functions.php';
 requireAdmin();
 
 $success = '';
 
+function generateSlug($string) {
+    $slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $string);
+    return strtolower(trim($slug, '-'));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add' || $action === 'edit') {
-        $id = (int) $_POST['festival_id'];
-        $name = trim($_POST['name']);
-        $start = $_POST['start_date'];
-        $end = $_POST['end_date'];
-        $color = trim($_POST['theme_color']);
-        $desc = trim($_POST['description']);
+        $id = (int) ($_POST['festival_id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $start = $_POST['start_date'] ?? '';
+        $end = $_POST['end_date'] ?? '';
+        $color = trim($_POST['theme_color'] ?? '');
+        $desc = trim($_POST['description'] ?? '');
+        $slug = generateSlug($name);
 
-        if ($action === 'add') {
-            $s = $pdo->prepare("INSERT INTO festivals (name, start_date, end_date, theme_color, description) VALUES (?, ?, ?, ?, ?)");
-            $s->execute([$name, $start, $end, $color, $desc]);
-            $success = "Festival added.";
+        // Validate dates
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+            $success = "Invalid date format.";
+        } elseif (strtotime($start) === false || strtotime($end) === false) {
+            $success = "Invalid date value.";
         } else {
-            $s = $pdo->prepare("UPDATE festivals SET name=?, start_date=?, end_date=?, theme_color=?, description=? WHERE id=?");
-            $s->execute([$name, $start, $end, $color, $desc, $id]);
-            $success = "Festival details updated.";
+            if ($action === 'add') {
+                $stmt = $pdo->prepare("INSERT INTO festivals (name, slug, start_date, end_date, theme_color, description) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$name, $slug, $start, $end, $color, $desc]);
+                $success = "Festival added.";
+            } else {
+                if ($id < 1) {
+                    $success = "Missing festival ID for edit.";
+                } else {
+                    $stmt = $pdo->prepare("UPDATE festivals SET name=?, slug=?, start_date=?, end_date=?, theme_color=?, description=? WHERE id=?");
+                    $stmt->execute([$name, $slug, $start, $end, $color, $desc, $id]);
+                    $success = "Festival details updated.";
+                }
+            }
         }
     } elseif ($action === 'delete') {
-        $id = (int) $_POST['festival_id'];
-        $s = $pdo->prepare("DELETE FROM festivals WHERE id=?");
-        $s->execute([$id]);
-        $success = "Festival deleted.";
+        $id = (int) ($_POST['festival_id'] ?? 0);
+        if ($id < 1) {
+            $success = "Missing festival ID for delete.";
+        } else {
+            $stmt = $pdo->prepare("DELETE FROM festivals WHERE id=?");
+            $stmt->execute([$id]);
+            $success = "Festival deleted.";
+        }
     }
 }
 

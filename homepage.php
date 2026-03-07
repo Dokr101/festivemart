@@ -79,26 +79,15 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                 <div class="hero-badge" style="background: rgba(255,255,255,0.05); border-color: var(--border);">
                     UPCOMING: <?php echo htmlspecialchars(strtoupper($upcoming['name'])); ?>
                 </div>
-            <?php endif; ?>
 
-            <?php if ($displayFestival): ?>
-                <h1 class="hero-title"><?php echo htmlspecialchars($displayFestival['banner_tagline']); ?></h1>
-                <p class="hero-tagline"><?php echo htmlspecialchars($displayFestival['description']); ?></p>
-            <?php else: ?>
-                <h1 class="hero-title">Prepare for the Festivities</h1>
-                <p class="hero-tagline">Your one-stop destination for all of Nepal's vibrant festivals.</p>
-            <?php endif; ?>
+                
 
-            <div class="hero-cta-group">
-                <!-- Shop Now redirects to login if not logged in -->
-                <a href="<?php echo isLoggedIn() ? 'customer/shop.php' . ($displayFestival ? '?festival=' . $displayFestival['id'] : '') : 'auth/login.php?redirect=' . urlencode(SITE_URL . '/customer/shop.php'); ?>"
-                    class="btn btn-primary btn-lg pulsing">Shop
-                    <?php echo $displayFestival ? htmlspecialchars($displayFestival['name']) : 'Now'; ?></a>
-                <a href="#festivals" class="btn btn-outline btn-lg">View All Festivals</a>
-            </div>
+
+            <?php endif; ?>
 
             <?php if ($upcoming && !$activeFestival): ?>
                 <!-- Countdown -->
+                 <br>
                 <?php
                 $targetDate = $upcoming['start_date'] . 'T00:00:00';
                 ?>
@@ -132,6 +121,26 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                     </div>
                 </div>
             <?php endif; ?>
+
+            <?php if ($displayFestival): ?>
+                <h1 class="hero-title"><?php echo htmlspecialchars($displayFestival['banner_tagline']); ?></h1>
+                <p class="hero-tagline"><?php echo htmlspecialchars($displayFestival['description']); ?></p>
+            <?php else: ?>
+                <h1 class="hero-title">Prepare for the Festivities</h1>
+                <p class="hero-tagline">Your one-stop destination for all of Nepal's vibrant festivals.</p>
+            <?php endif; ?>
+
+            
+
+            <div class="hero-cta-group">
+                <!-- Shop Now redirects to login if not logged in -->
+                <a href="<?php echo isLoggedIn() ? 'customer/shop.php' . ($displayFestival ? '?festival=' . $displayFestival['id'] : '') : 'auth/login.php?redirect=' . urlencode(SITE_URL . '/customer/shop.php'); ?>"
+                    class="btn btn-primary btn-lg pulsing">Shop
+                    <?php echo $displayFestival ? htmlspecialchars($displayFestival['name']) : 'Now'; ?></a>
+                <a href="#festivals" class="btn btn-outline btn-lg">View All Festivals</a>
+            </div>
+
+            
         </div>
     </section>
 

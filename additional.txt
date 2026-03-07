@@ -1,0 +1,12 @@
+whenever user visits homepage in a running festival, the animation of that festival should be displayed.
+like in tihar, the live firecracker animations should be displaying in the whole page for the 3 to 4 seconds max.
+like in holi, the live color animations should be  displaying in the whole page " " " " " etc
+
+
+if the festival is upcoming then only the countdown timer should be displayed.
+no animation should be there. and if the festival is active then only the animation should be there. 
+no countdown timer should be there. and if the festival is past then only the message of past festival should be there.
+
+the change in css too like in new year, the homepage is green and nothing is in green.
+not only in the homepage, but in the whole website to the customer side, the css should be changed according to the festival. 
+
