@@ -137,7 +137,7 @@ $particleC2 = $displayFestival['accent_color'] ?? '#FFD700';
                 <a href="<?php echo isLoggedIn() ? 'customer/shop.php' . ($displayFestival ? '?festival=' . $displayFestival['id'] : '') : 'auth/login.php?redirect=' . urlencode(SITE_URL . '/customer/shop.php'); ?>"
                     class="btn btn-primary btn-lg pulsing">Shop
                     <?php echo $displayFestival ? htmlspecialchars($displayFestival['name']) : 'Now'; ?></a>
-                <a href="#festivals" class="btn btn-outline btn-lg">View All Festivals</a>
+                <a href="#festivals" class="btn btn-outline btn-lg">View All Upcoming Festivals</a>
             </div>
 
             

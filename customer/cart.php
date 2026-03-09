@@ -699,8 +699,38 @@ $total = $subtotal - $discountAmt + $shipping;
 
                     updateCalculation();
                 })();
+
+                // Ensure checkout form submits selected items
+var checkoutForm = document.getElementById('checkoutForm');
+if (checkoutForm) {
+    checkoutForm.addEventListener('submit', function(e) {
+        // Remove any previously added hidden inputs with name 'selected_items[]'
+        var existingHidden = this.querySelectorAll('input[name="selected_items[]"]');
+        existingHidden.forEach(el => el.remove());
+
+        // Get all checked item checkboxes (they are outside this form)
+        var checkedBoxes = document.querySelectorAll('.cart-item .item-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            e.preventDefault(); // Stop submission
+            alert('Please select at least one item to checkout.');
+            return false;
+        }
+
+        // For each checked checkbox, create a hidden input and append to form
+        checkedBoxes.forEach(cb => {
+            var hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'selected_items[]';
+            hidden.value = cb.value; // cart_id
+            this.appendChild(hidden);
+        });
+
+        // Continue with normal form submission
+    });
+}
             </script>
         <?php endif; ?>
+        
     </div> <!-- .page-wrapper -->
 
     <script src="../assets/js/main.js"></script>
